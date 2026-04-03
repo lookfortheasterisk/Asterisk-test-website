@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASTERISK*</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --lime: #CFFF04;
+      --indigo: #5D00FF;
+      --black: #0F0F0F;
+      --white: #FFFFFF;
+    }
+
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--black);
+      color: var(--white);
+      font-family: 'Roboto', sans-serif;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---- CANVAS BACKGROUND ---- */
+    #smoke-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      opacity: 0.45;
+    }
+
+    /* ---- GRAIN OVERLAY ---- */
+    .grain {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+    }
+
+    /* ---- CONTENT LAYER ---- */
+    .site {
+      position: relative;
+      z-index: 2;
+    }
+
+    /* ---- FADE IN ---- */
+    .fi {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .fi.on { opacity: 1; transform: translateY(0); }
+    .fi.d1 { transition-delay: 0.1s; }
+    .fi.d2 { transition-delay: 0.2s; }
+    .fi.d3 { transition-delay: 0.3s; }
+    .fi.d4 { transition-delay: 0.4s; }
+    .fi.d5 { transition-delay: 0.5s; }
+
+    /* ---- NAV ---- */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 28px 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* ---- SECTION RULE ---- */
+    .rule {
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 30%, rgba(255,255,255,0.1) 70%, transparent 100%);
+    }
+
+    /* ---- EYEBROW ---- */
+    .eyebrow {
+      font-family: 'Roboto', sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      display: block;
+      margin-bottom: 20px;
+    }
+
+    /* ---- LOGO ASTERISK MARKS ---- */
+    /* Inline brand mark used wherever * appears */
+    .ast {
+      display: inline-block;
+      height: 0.6em;
+      width: auto;
+      vertical-align: super;
+      margin-left: 1px;
+      /* Default: already white, no filter needed */
+    }
+    /* Lime tinted version (for lime contexts) */
+    .ast.lime {
+      filter: brightness(0) saturate(100%) invert(92%) sepia(100%) saturate(380%) hue-rotate(28deg) brightness(1.08);
+    }
+    /* Muted lime (for dimmed lime contexts) */
+    .ast.lime-dim {
+      filter: brightness(0) saturate(100%) invert(92%) sepia(100%) saturate(380%) hue-rotate(28deg) brightness(1.08);
+      opacity: 0.35;
+    }
+    /* Muted white (for dim text contexts) */
+    .ast.muted {
+      opacity: 0.3;
+    }
+    /* Very faint decorative large mark */
+    .ast.deco {
+      filter: brightness(0) saturate(100%) invert(92%) sepia(100%) saturate(380%) hue-rotate(28deg) brightness(1.08);
+      opacity: 0.07;
+      height: 80px;
+      display: block;
+      margin: 80px auto 0;
+    }
+    /* For large display headings — slightly smaller relative size */
+    .ast.display {
+      height: 0.5em;
+      vertical-align: super;
+      margin-left: 2px;
+    }
+    /* Eyebrow scale */
+    .ast.eyebrow-mark {
+      height: 10px;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+
+    /* ---- HERO ---- */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 120px 48px 100px;
+      position: relative;
+    }
+
+    .hero-glow {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(93,0,255,0.12) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    .hero-headline {
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: clamp(36px, 5.5vw, 80px);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      max-width: 860px;
+    }
+
+    .hero-headline em {
+      font-style: normal;
+      color: var(--lime);
+    }
+
+    .scroll-hint {
+      position: absolute;
+      bottom: 52px;
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .scroll-label {
+      font-size: 9px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      font-family: 'Roboto', sans-serif;
+    }
+
+    .scroll-line {
+      width: 1px;
+      height: 40px;
+      background: linear-gradient(180deg, rgba(207,255,4,0.5) 0%, transparent 100%);
+      animation: scrollPulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes scrollPulse {
+      0%, 100% { opacity: 1; transform: scaleY(1); transform-origin: top; }
+      50% { opacity: 0.3; transform: scaleY(0.6); transform-origin: top; }
+    }
+
+    /* ---- BELIEFS ---- */
+    .beliefs {
+      padding: 120px 56px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .beliefs-header { margin-bottom: 72px; }
+
+    .beliefs-title {
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: clamp(32px, 4vw, 56px);
+      letter-spacing: -0.03em;
+    }
+
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1px;
+      background: rgba(255,255,255,0.06);
+    }
+
+    .pillar {
+      padding: 52px 44px;
+      background: rgba(15,15,15,0.95);
+      transition: background 0.3s ease;
+      cursor: default;
+    }
+
+    .pillar:hover { background: rgba(207,255,4,0.03); }
+
+    .pillar-bar {
+      width: 32px;
+      height: 2px;
+      background: var(--lime);
+      margin-bottom: 36px;
+      transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .pillar:hover .pillar-bar { width: 56px; }
+
+    .pillar-name {
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pillar-body {
+      font-size: 14px;
+      line-height: 1.75;
+      color: rgba(255,255,255,0.42);
+    }
+
+    /* ---- PHILOSOPHY ---- */
+    .philosophy {
+      padding: 160px 56px;
+      max-width: 960px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .philosophy-text {
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: clamp(28px, 4vw, 54px);
+      line-height: 1.25;
+      letter-spacing: -0.025em;
+    }
+
+    .philosophy-text .line1 { color: rgba(255,255,255,0.35); }
+    .philosophy-text .line2 { color: rgba(255,255,255,0.6); }
+    .philosophy-text .line3 { color: rgba(255,255,255,1.0); }
+
+    /* ---- CLIP+ART* ---- */
+    .drop {
+      padding: 120px 56px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .drop-title {
+      font-family: 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: clamp(72px, 13vw, 160px);
+      line-height: 0.9;
+      letter-spacing: -0.04em;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: baseline;
+    }
+
+    .drop-desc {
+      font-size: 15px;
+      line-height: 1.75;
+      color: rgba(255,255,255,0.38);
+      max-width: 480px;
+      margin-bottom: 80px;
+    }
+
+    .countdown-label {
+      font-size: 9px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      font-family: 'Roboto', sans-serif;
+      margin-bottom: 32px;
+    }
+
+    .countdown {
+      display: flex;
+      align-items: flex-start;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+
+    .count-unit { text-align: center; }
+
+    .count-num {
+      font-family: 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: clamp(52px, 8vw, 100px);
+      line-height: 1;
+      letter-spacing: -0.04em;
+      color: var(--lime);
+      text-shadow:
+        0 0 40px rgba(207, 255, 4, 0.25),
+        0 0 80px rgba(207, 255, 4, 0.08);
+      min-width: 2ch;
+      display: block;
+    }
+
+    .count-label {
+      font-family: 'Roboto', sans-serif;
+      font-size: 9px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.22);
+      margin-top: 10px;
+      display: block;
+    }
+
+    .count-sep {
+      font-family: 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: clamp(40px, 6vw, 80px);
+      color: rgba(255,255,255,0.12);
+      line-height: 1;
+      margin-top: 4px;
+      align-self: flex-start;
+    }
+
+    /* ---- NOTIFY ---- */
+    .notify {
+      padding: 160px 56px;
+      max-width: 720px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .notify-headline {
+      font-family: 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: clamp(52px, 9vw, 116px);
+      line-height: 0.92;
+      letter-spacing: -0.04em;
+      margin-bottom: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .notify-headline .line-bottom {
+      color: var(--lime);
+      display: flex;
+      align-items: baseline;
+      gap: 0px;
+    }
+
+    .notify-sub {
+      font-size: 15px;
+      line-height: 1.75;
+      color: rgba(255,255,255,0.38);
+      margin-bottom: 56px;
+    }
+
+    .notify-form {
+      display: flex;
+      gap: 10px;
+      max-width: 460px;
+      margin: 0 auto;
+    }
+
+    .notify-input {
+      flex: 1;
+      padding: 15px 20px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: white;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      outline: none;
+      border-radius: 3px;
+      transition: border-color 0.2s ease;
+    }
+
+    .notify-input:focus { border-color: rgba(207,255,4,0.5); }
+    .notify-input::placeholder { color: rgba(255,255,255,0.25); }
+
+    .notify-btn {
+      padding: 15px 28px;
+      background: var(--lime);
+      color: var(--black);
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .notify-btn:hover { opacity: 0.88; transform: scale(1.02); }
+    .notify-btn:active { transform: scale(0.97); }
+
+    .form-success {
+      display: none;
+      margin-top: 24px;
+      font-family: 'Roboto', sans-serif;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      color: var(--lime);
+      align-items: center;
+      gap: 4px;
+      justify-content: center;
+    }
+
+    /* ---- FOOTER ---- */
+    footer {
+      padding: 40px 56px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-copy {
+      font-family: 'Roboto', sans-serif;
+      font-size: 11px;
+      color: rgba(255,255,255,0.18);
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    /* ---- RESPONSIVE ---- */
+    @media (max-width: 640px) {
+      nav { padding: 24px 28px; }
+      .beliefs, .drop, .notify, .philosophy { padding-left: 28px; padding-right: 28px; }
+      footer { padding: 32px 28px; }
+      .countdown { gap: 24px; }
+      .notify-form { flex-direction: column; }
+      .notify-btn { width: 100%; }
+      .drop-title { display: block; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- WebGL Smoke Background -->
+  <canvas id="smoke-canvas"></canvas>
+
+  <!-- Grain Texture -->
+  <div class="grain"></div>
+
+  <!-- Site Content -->
+  <div class="site">
+
+    <!-- NAV -->
+    <nav>
+      <img src="brand_assets/Logo Transpared White.png" alt="ASTERISK*" style="height:30px;opacity:0.85;">
+    </nav>
+
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+      <div class="hero-glow"></div>
+
+      <span class="eyebrow fi on" style="transition-delay:0s;">
+        ASTERISK<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast eyebrow-mark muted">
+      </span>
+
+      <h1 class="hero-headline fi on d1">
+        There's always more<br>to something than<br><em>meets the eye.</em>
+      </h1>
+
+      <div class="scroll-hint fi on d3">
+        <span class="scroll-label">scroll to explore</span>
+        <div class="scroll-line"></div>
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ============ WHAT WE BELIEVE IN ============ -->
+    <section class="beliefs">
+
+      <div class="beliefs-header">
+        <span class="eyebrow fi">02</span>
+        <h2 class="beliefs-title fi d1">
+          What we believe in<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast lime">
+        </h2>
+      </div>
+
+      <div class="pillars">
+
+        <div class="pillar fi d1">
+          <div class="pillar-bar"></div>
+          <h3 class="pillar-name">
+            Innovation<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast lime">
+          </h3>
+          <p class="pillar-body">All our drops are either a completely new product or a radical reimagination of something ordinary. That's how we justify the asterisk.</p>
+        </div>
+
+        <div class="pillar fi d2">
+          <div class="pillar-bar"></div>
+          <h3 class="pillar-name">
+            Art<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast lime">
+          </h3>
+          <p class="pillar-body">We collaborate with artists on everything we make to further our goal of building a real artist ecosystem in India.</p>
+        </div>
+
+        <div class="pillar fi d3">
+          <div class="pillar-bar"></div>
+          <h3 class="pillar-name">
+            Sustainability<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast lime">
+          </h3>
+          <p class="pillar-body">Every product is made from recycled plastic we source.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ============ PHILOSOPHY ============ -->
+    <section class="philosophy">
+
+      <span class="eyebrow fi">The Asterisk Philosophy</span>
+
+      <div class="philosophy-text fi d1">
+        <span class="line1">Things with an asterisk<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast lime" style="opacity:0.4;"> always come with a footnote.</span>
+        <br><br>
+        <span class="line2">They always have more to them.</span>
+        <br><br>
+        <span class="line3">More layers. More meaning. More story.</span>
+      </div>
+
+      <!-- Decorative logo mark -->
+      <img src="brand_assets/Logo Transpared White.png" alt="" class="ast deco fi d3" aria-hidden="true">
+
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ============ CLIP+ART* DROP ============ -->
+    <section class="drop">
+
+      <span class="eyebrow fi">First Drop</span>
+
+      <div class="drop-title fi d1">
+        Clip<span style="color:var(--indigo)">+</span>Art<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast lime display">
+      </div>
+
+      <p class="drop-desc fi d2">Curating a walking gallery.</p>
+
+      <div class="fi d3">
+        <p class="countdown-label">Dropping in</p>
+        <div class="countdown">
+          <div class="count-unit">
+            <span class="count-num" id="days">00</span>
+            <span class="count-label">Days</span>
+          </div>
+          <span class="count-sep">:</span>
+          <div class="count-unit">
+            <span class="count-num" id="hours">00</span>
+            <span class="count-label">Hours</span>
+          </div>
+          <span class="count-sep">:</span>
+          <div class="count-unit">
+            <span class="count-num" id="minutes">00</span>
+            <span class="count-label">Minutes</span>
+          </div>
+          <span class="count-sep">:</span>
+          <div class="count-unit">
+            <span class="count-num" id="seconds">00</span>
+            <span class="count-label">Seconds</span>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ============ NOTIFY ME ============ -->
+    <section class="notify">
+
+      <span class="eyebrow fi">Notify Me</span>
+
+      <h2 class="notify-headline fi d1">
+        <span>Be an</span>
+        <span class="line-bottom">
+          Asterisk<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast lime-dim display">
+        </span>
+      </h2>
+
+      <p class="notify-sub fi d2">
+        Get early access to Clip+Art<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast lime" style="height:0.7em;"> and everything that comes after it.
+      </p>
+
+      <form class="notify-form fi d3" onsubmit="handleNotify(event)">
+        <input
+          type="email"
+          class="notify-input"
+          placeholder="your@email.com"
+          required
+        />
+        <button type="submit" class="notify-btn">Notify Me</button>
+      </form>
+
+      <p class="form-success fi" id="form-success">
+        You're in. Watch this space<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast lime" style="height:12px;vertical-align:super;">
+      </p>
+
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+      <img src="brand_assets/Logo Transpared White.png" alt="ASTERISK*" style="height:22px;opacity:0.3;">
+      <span class="footer-copy">
+        © 2026 ASTERISK<img src="brand_assets/Logo Transpared White.png" alt="*" class="ast" style="height:9px;opacity:0.18;vertical-align:super;">
+      </span>
+    </footer>
+
+  </div><!-- /site -->
+
+  <script>
+    // ============================================
+    // WEBGL SMOKE BACKGROUND
+    // ============================================
+    (function () {
+      const VERT = `#version 300 es
+precision highp float;
+in vec4 position;
+void main(){ gl_Position = position; }`;
+
+      const FRAG = `#version 300 es
+precision highp float;
+out vec4 O;
+uniform float time;
+uniform vec2 resolution;
+uniform vec3 u_color;
+#define FC gl_FragCoord.xy
+#define R resolution
+#define T (time+660.)
+float rnd(vec2 p){p=fract(p*vec2(12.9898,78.233));p+=dot(p,p+34.56);return fract(p.x*p.y);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(rnd(i),rnd(i+vec2(1,0)),u.x),mix(rnd(i+vec2(0,1)),rnd(i+1.),u.x),u.y);}
+float fbm(vec2 p){float t=.0,a=1.;for(int i=0;i<5;i++){t+=a*noise(p);p*=mat2(1,-1.2,.2,1.2)*2.;a*=.5;}return t;}
+void main(){
+  vec2 uv=(FC-.5*R)/R.y;
+  vec3 col=vec3(1);
+  uv.x+=.25;
+  uv*=vec2(2,1);
+  float n=fbm(uv*.28-vec2(T*.01,0));
+  n=noise(uv*3.+n*2.);
+  col.r-=fbm(uv+vec2(0,T*.015)+n);
+  col.g-=fbm(uv*1.003+vec2(0,T*.015)+n+.003);
+  col.b-=fbm(uv*1.006+vec2(0,T*.015)+n+.006);
+  col=mix(col, u_color, dot(col,vec3(.21,.71,.07)));
+  col=mix(vec3(.08),col,min(time*.1,1.));
+  col=clamp(col,.08,1.);
+  O=vec4(col,1);
+}`;
+
+      const canvas = document.getElementById('smoke-canvas');
+      const gl = canvas.getContext('webgl2');
+      if (!gl) { canvas.style.display = 'none'; return; }
+
+      function mkShader(type, src) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          console.warn(gl.getShaderInfoLog(s));
+        }
+        return s;
+      }
+
+      const prog = gl.createProgram();
+      gl.attachShader(prog, mkShader(gl.VERTEX_SHADER, VERT));
+      gl.attachShader(prog, mkShader(gl.FRAGMENT_SHADER, FRAG));
+      gl.linkProgram(prog);
+
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,1,-1,-1,1,1,1,-1]), gl.STATIC_DRAW);
+      const posLoc = gl.getAttribLocation(prog, 'position');
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+      const uRes  = gl.getUniformLocation(prog, 'resolution');
+      const uTime = gl.getUniformLocation(prog, 'time');
+      const uColor = gl.getUniformLocation(prog, 'u_color');
+
+      // Tint: Electric Indigo #5D00FF
+      const smokeRGB = [93/255, 0/255, 255/255];
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width  = window.innerWidth  * dpr;
+        canvas.height = window.innerHeight * dpr;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      function frame(now) {
+        gl.useProgram(prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.uniform2f(uRes, canvas.width, canvas.height);
+        gl.uniform1f(uTime, now * 1e-3);
+        gl.uniform3fv(uColor, smokeRGB);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    })();
+
+
+    // ============================================
+    // COUNTDOWN — target: June 20, 2026
+    // ============================================
+    const DROP_DATE = new Date('2026-06-20T12:00:00');
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function tick() {
+      const diff = DROP_DATE - Date.now();
+      if (diff <= 0) {
+        ['days','hours','minutes','seconds'].forEach(id => {
+          document.getElementById(id).textContent = '00';
+        });
+        return;
+      }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor(diff % 86400000 / 3600000);
+      const m = Math.floor(diff % 3600000  / 60000);
+      const s = Math.floor(diff % 60000    / 1000);
+      document.getElementById('days').textContent    = pad(d);
+      document.getElementById('hours').textContent   = pad(h);
+      document.getElementById('minutes').textContent = pad(m);
+      document.getElementById('seconds').textContent = pad(s);
+    }
+    tick();
+    setInterval(tick, 1000);
+
+
+    // ============================================
+    // SCROLL-TRIGGERED FADE IN
+    // ============================================
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('on');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.08 });
+
+    document.querySelectorAll('.fi').forEach(el => {
+      if (!el.classList.contains('on')) {
+        io.observe(el);
+      }
+    });
+
+
+    // ============================================
+    // NOTIFY FORM
+    // ============================================
+    function handleNotify(e) {
+      e.preventDefault();
+      const success = document.getElementById('form-success');
+      e.target.style.opacity = '0.35';
+      e.target.style.pointerEvents = 'none';
+      success.style.display = 'flex';
+      requestAnimationFrame(() => success.classList.add('on'));
+    }
+  </script>
+
+</body>
+</html>
